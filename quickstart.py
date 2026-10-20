@@ -7,6 +7,14 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from bs4 import BeautifulSoup
+
+import base64
+import re
+from email import policy
+from email.parser import BytesParser
+from bs4 import BeautifulSoup
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
@@ -44,17 +52,59 @@ def main():
     if not messages:
       print("no messages")
     else:
-      full_message = None
+      execute = True
       for message in messages['messages']:
-        print(message['id'])
+        message_id = message['id']
 
-        if not full_message:
-          full_message = service.users().messages().get(userId="me", id=message['id'], format='raw').execute()
+        # extract_body(service=service, message_id=message_id)
 
-      raw_email = full_message['raw']
-      decoded_email = base64.urlsafe_b64decode(raw_email).decode("utf-8")
+        if execute:
+          extract_body(service, message_id=message_id)
+          execute = False
 
-      print(decoded_email)
+  except HttpError as error:
+    # TODO(developer) - Handle errors from gmail API.
+    print(f"An error occurred: {error}")
+
+
+def extract_body(service, message_id) -> None:
+  full_message = service.users().messages().get(userId="me", id=message_id, format='raw').execute()
+
+  if full_message:
+    raw_email = full_message['raw']
+
+    email_bytes = base64.urlsafe_b64decode(raw_email)
+    email_message = BytesParser(policy=policy.default).parsebytes(email_bytes)
+
+    subject = email_message['Subject']
+    sender = email_message['From']
+
+    body = email_message.get_body(preferencelist=("plain", "html"))
+
+    if body:
+      content = body.get_content()
+
+      # Remove HTML if necessary
+      if body.get_content_type() == "text/html":
+        content = BeautifulSoup(content, "html.parser").get_text(" ", strip=True)
+
+      # Normalize whitespace
+      content = re.sub(r"\s+", " ", content).strip()
+
+      email_data = {
+        sender: sender,
+        subject: subject,
+        content: content
+      }
+
+      print(email_data)
+
+def extract_subject(service, message_id) -> None:
+  full_message = service.users().messages().get(userId="me", id=message_id).execute()
+
+  print(full_message['payload']['headers'])
+
+
 
       
 
@@ -64,11 +114,6 @@ def main():
     # print("Labels:")
     # for label in labels:
     #   print(label["name"])
-
-  except HttpError as error:
-    # TODO(developer) - Handle errors from gmail API.
-    print(f"An error occurred: {error}")
-
 
 if __name__ == "__main__":
   main()
