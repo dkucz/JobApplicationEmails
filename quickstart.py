@@ -15,6 +15,46 @@ from email import policy
 from email.parser import BytesParser
 from bs4 import BeautifulSoup
 
+APPLICATION_KEYWORDS = [
+    "application received",
+    "application submitted",
+    "thank you for applying",
+    "thanks for applying",
+    "we received your application",
+    "your application for",
+    "application confirmation",
+    "successfully applied",
+    "confirmation of your application",
+]
+
+INTERVIEW_KEYWORDS = [
+    "interview invitation",
+    "invite you to interview",
+    "schedule an interview",
+    "interview availability",
+    "online assessment",
+    "coding assessment",
+    "technical assessment",
+    "assessment invitation",
+]
+
+UPDATE_KEYWORDS = [
+    "application update",
+    "update on your application",
+    "status of your application",
+    "moving forward with your application",
+    "not moving forward",
+    "unable to proceed",
+    "offer of employment",
+    "offer letter",
+]
+
+keyword_categories = {
+  'application': APPLICATION_KEYWORDS,
+  'interview': INTERVIEW_KEYWORDS,
+  'update': UPDATE_KEYWORDS
+}
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
@@ -56,11 +96,7 @@ def main():
       for message in messages['messages']:
         message_id = message['id']
 
-        # extract_body(service=service, message_id=message_id)
-
-        if execute:
-          extract_body(service, message_id=message_id)
-          execute = False
+        extract_body(service=service, message_id=message_id)
 
   except HttpError as error:
     # TODO(developer) - Handle errors from gmail API.
@@ -92,28 +128,25 @@ def extract_body(service, message_id) -> None:
       content = re.sub(r"\s+", " ", content).strip()
 
       email_data = {
-        sender: sender,
-        subject: subject,
-        content: content
+        "sender": sender,
+        "subject": subject,
+        "content": content
       }
 
-      print(email_data)
+      check_keywords(email_data=email_data)
 
-def extract_subject(service, message_id) -> None:
-  full_message = service.users().messages().get(userId="me", id=message_id).execute()
+def check_keywords(email_data) -> None:
+  subject_line = email_data['subject']
+  content = email_data['content']
 
-  print(full_message['payload']['headers'])
+  for category, keywords in keyword_categories.items():
+    for keyword in keywords:
+      if keyword in subject_line or keyword in content:
+        print(f'Found {category} email')
+        print(email_data)
+        return
 
-
-
-      
-
-    # if not labels:
-    #   print("No labels found.")
-    #   return
-    # print("Labels:")
-    # for label in labels:
-    #   print(label["name"])
+  print('Not a job email')
 
 if __name__ == "__main__":
   main()
