@@ -1,3 +1,7 @@
+from datetime import datetime, timezone
+
+from gemini_interactor import GeminiInteractor
+
 import os.path
 import base64
 
@@ -14,6 +18,15 @@ import re
 from email import policy
 from email.parser import BytesParser
 from bs4 import BeautifulSoup
+
+BLACKLIST_KEYWORDS = [
+    "work permit",
+    "application number",
+    "immigration, refugees and citizenship canada",
+    "ircc",
+    "immigration, refugee and citizenship canada",
+    "embassy",
+]
 
 APPLICATION_KEYWORDS = [
     "application received",
@@ -55,98 +68,166 @@ keyword_categories = {
   'update': UPDATE_KEYWORDS
 }
 
+CURRENT_WINDOW = '2d'
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
+class JobApplicationTracker:
+  def __init__(self, spreadsheet_interactor=None, gemini_interactor=None):
 
-def main():
-  """Shows basic usage of the Gmail API.
-  Lists the user's Gmail labels.
-  """
-  creds = None
-  # The file token.json stores the user's access and refresh tokens, and is
-  # created automatically when the authorization flow completes for the first
-  # time.
-  if os.path.exists("token.json"):
-    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-  # If there are no (valid) credentials available, let the user log in.
-  if not creds or not creds.valid:
-    if creds and creds.expired and creds.refresh_token:
-      creds.refresh(Request())
-    else:
-      flow = InstalledAppFlow.from_client_secrets_file(
-          "credentials.json", SCOPES
-      )
-      creds = flow.run_local_server(port=0)
-    # Save the credentials for the next run
-    with open("token.json", "w") as token:
-      token.write(creds.to_json())
+    self.service = None
+    self.spreadsheet_interactor = spreadsheet_interactor
+    self.gemini_interactor = gemini_interactor
 
-  try:
-    # Call the Gmail API
-    service = build("gmail", "v1", credentials=creds)
-    # results = service.users().labels().list(userId="me").execute()
-    # labels = results.get("labels", [])
-    messages = service.users().messages().list(userId="me", maxResults=10).execute()
+    creds = None
+    # The file token.json stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists("token.json"):
+      creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+      if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+      else:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "credentials.json", SCOPES
+        )
+        creds = flow.run_local_server(port=0)
+      # Save the credentials for the next run
+      with open("token.json", "w") as token:
+        token.write(creds.to_json())
 
-    if not messages:
-      print("no messages")
-    else:
-      execute = True
-      for message in messages['messages']:
-        message_id = message['id']
+    try:
+      # Call the Gmail API
+      self.service = build("gmail", "v1", credentials=creds)
 
-        extract_body(service=service, message_id=message_id)
-
-  except HttpError as error:
-    # TODO(developer) - Handle errors from gmail API.
-    print(f"An error occurred: {error}")
+    except HttpError as error:
+      # TODO(developer) - Handle errors from gmail API.
+      print(f"An error occurred: {error}")
 
 
-def extract_body(service, message_id) -> None:
-  full_message = service.users().messages().get(userId="me", id=message_id, format='raw').execute()
+  def _extract_new_message_ids(self) -> list[str]:
+    if self.service is None:
+      raise RuntimeError('Gmail service not initialized in extract new messages')
 
-  if full_message:
-    raw_email = full_message['raw']
+    msg_ids = []
+    messages = self.service.users().messages().list(userId="me", q=f"newer_than:{CURRENT_WINDOW}").execute()
 
-    email_bytes = base64.urlsafe_b64decode(raw_email)
-    email_message = BytesParser(policy=policy.default).parsebytes(email_bytes)
+    for message in messages['messages']:
+      msg_ids.append(message['id'])
 
-    subject = email_message['Subject']
-    sender = email_message['From']
+    return msg_ids
 
-    body = email_message.get_body(preferencelist=("plain", "html"))
+  def _check_keywords(self, email_data) -> bool:
+    subject_line = email_data["subject"].lower()
+    content = email_data['content'].lower()
 
-    if body:
-      content = body.get_content()
+    for category, keywords in keyword_categories.items():
+      for keyword in keywords:
+        if keyword in subject_line or keyword in content:
+          print(f'Found {category} email')
+          print(email_data)
+          return True
+    return False
 
-      # Remove HTML if necessary
-      if body.get_content_type() == "text/html":
-        content = BeautifulSoup(content, "html.parser").get_text(" ", strip=True)
+  def _check_private(self, email_data) -> bool:
+    subject_line = email_data["subject"].lower()
+    content = email_data['content'].lower()
 
-      # Normalize whitespace
-      content = re.sub(r"\s+", " ", content).strip()
-
-      email_data = {
-        "sender": sender,
-        "subject": subject,
-        "content": content
-      }
-
-      check_keywords(email_data=email_data)
-
-def check_keywords(email_data) -> None:
-  subject_line = email_data['subject']
-  content = email_data['content']
-
-  for category, keywords in keyword_categories.items():
-    for keyword in keywords:
+    for keyword in BLACKLIST_KEYWORDS:
       if keyword in subject_line or keyword in content:
-        print(f'Found {category} email')
-        print(email_data)
-        return
+        return True
+    return False
 
-  print('Not a job email')
+
+  def _extract_body(self, message_id):
+    if self.service is None:
+      raise RuntimeError('Gmail service not initialized in extract body')
+    
+    full_message = self.service.users().messages().get(userId="me", id=message_id, format='raw').execute()
+
+    if full_message:
+      raw_email = full_message['raw']
+
+      email_bytes = base64.urlsafe_b64decode(raw_email)
+      email_message = BytesParser(policy=policy.default).parsebytes(email_bytes)
+
+      subject = email_message['Subject']
+      sender = email_message['From']
+
+      body = email_message.get_body(preferencelist=("plain", "html"))
+
+      if body:
+        content = body.get_content()
+
+        # Remove HTML if necessary
+        if body.get_content_type() == "text/html":
+          content = BeautifulSoup(content, "html.parser").get_text(" ", strip=True)
+
+        # Normalize whitespace
+        content = re.sub(r"\s+", " ", content).strip()
+
+        email_data = {
+          "id": message_id,
+          "sender": sender,
+          "subject": subject,
+          "content": content
+        }
+
+        return email_data
+
+  def process(self, emails):
+    for email in emails:
+      if isinstance(self.gemini_interactor, GeminiInteractor):
+        self.gemini_interactor.prompt(email['content'])
+
+      if isinstance(self.spreadsheet_interactor, SpreadsheetInteractor):
+        self.spreadsheet_interactor.add_to_spreadsheet(email)
+
+  def run(self):
+    emails = []
+
+    to_process = []
+
+    msg_ids = self._extract_new_message_ids()
+
+    for id in msg_ids:
+      email_data = self._extract_body(id)
+
+      if email_data:
+        emails.append(email_data)
+
+    for email in emails:
+      private = self._check_private(email)
+
+      if private:
+        continue
+
+      check = self._check_keywords(email)
+
+      if check:
+        to_process.append(email)
+
+    self.process(to_process)
+
+
+class SpreadsheetInteractor:
+  def __init__(self, name):
+    return
+
+  def create(self):
+    return
+
+  def add_to_spreadsheet(self, email_data):
+    return
+
+  def check_existance(self, message_id) -> bool:
+    return False
 
 if __name__ == "__main__":
-  main()
+  # main()
+  gemini_interactor = GeminiInteractor()
+  job_app_tracker = JobApplicationTracker(gemini_interactor=gemini_interactor)
+  job_app_tracker.run()
