@@ -1,3 +1,4 @@
+import os
 import os.path
 
 from google.auth.transport.requests import Request
@@ -5,11 +6,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from dotenv import load_dotenv
+from dotenv import set_key
 
 SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/spreadsheets",
 ]
+
+load_dotenv()
 
 class SpreadsheetInteractor:
   def __init__(self):
@@ -31,6 +36,41 @@ class SpreadsheetInteractor:
 
     try:
         self.service = build("sheets", "v4", credentials=creds)
+        self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
+
+        if self.spreadsheet_id is None:
+            spreadsheet = self.service.spreadsheets().create(
+                body={
+                    "properties": {
+                        "title": "Job Application Tracker"
+                    }
+                }
+            ).execute()
+
+            self.spreadsheet_id = spreadsheet["spreadsheetId"]
+
+            set_key(".env", "SPREADSHEET_ID", self.spreadsheet_id)
+
+            print(spreadsheet["spreadsheetUrl"], self.spreadsheet_id)
+
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range="Sheet1!A1:H1",
+                valueInputOption="RAW",
+                body={
+                    "values": [[
+                        "Date Received",
+                        "Company",
+                        "Job Title",
+                        "Email Type",
+                        "Application Status",
+                        "Job Location",
+                        "Next Action",
+                        "Gmail Message ID"
+                    ]]
+                }
+            ).execute()
+
 
     except HttpError as error:
        print(error)
