@@ -8,6 +8,11 @@ load_dotenv()
 class JobEmail(BaseModel):
     job_role: str = Field(description="Specific job title applied for, or empty if not a job email")
     company: str = Field(description="Company applied to, or empty if not a job email")
+    is_job_email: bool = Field(description="Is this a job email or not")
+    interview_received: bool = Field(description="Is this email informing of an upcoming interview")
+    rejected: bool = Field(description="Is this email sending out a rejection from the job")
+    application_status: str = Field(description="One word that represents status of the job, one of applied, interviewing, rejected, or offer")
+    job_location: str = Field(description="Location of the job if in email, otherwise leave blank")
 
 class GeminiInteractor:
     def __init__(self):
