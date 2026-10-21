@@ -1,8 +1,13 @@
 import os
 from dotenv import load_dotenv
 from google import genai
+from pydantic import BaseModel, Field
 
 load_dotenv()
+
+class JobEmail(BaseModel):
+    job_role: str = Field(description="Specific job title applied for, or empty if not a job email")
+    company: str = Field(description="Company applied to, or empty if not a job email")
 
 class GeminiInteractor:
     def __init__(self):
@@ -15,7 +20,13 @@ class GeminiInteractor:
 
         interaction = self.client.interactions.create(
             model=self.model,
-            input=input_prompt
+            input=input_prompt,
+            response_format={
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": JobEmail.model_json_schema()
+            },
         )
 
-        print(interaction.output_text)
+        job_email = JobEmail.model_validate_json(interaction.output_text)
+        print(job_email)
