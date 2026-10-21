@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from gemini_interactor import GeminiInteractor
+from spreadsheet_interactor import SpreadsheetInteractor
 
 import os.path
 import base64
@@ -71,7 +72,10 @@ keyword_categories = {
 CURRENT_WINDOW = '2d'
 
 # If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/spreadsheets",
+]
 
 class JobApplicationTracker:
   def __init__(self, spreadsheet_interactor=None, gemini_interactor=None):
@@ -211,20 +215,6 @@ class JobApplicationTracker:
         to_process.append(email)
 
     self.process(to_process)
-
-
-class SpreadsheetInteractor:
-  def __init__(self, name):
-    return
-
-  def create(self):
-    return
-
-  def add_to_spreadsheet(self, email_data):
-    return
-
-  def check_existance(self, message_id) -> bool:
-    return False
 
 if __name__ == "__main__":
   # main()
