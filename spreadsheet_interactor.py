@@ -75,17 +75,17 @@ class SpreadsheetInteractor:
         except HttpError as error:
             print(error)
 
-    def _check_existance(self, message_id, values) -> bool:
-        # currently will need to run an API call to check existance of each message. So just check
+    def get_existance_set(self) -> set:
         range = "Sheet1!H2:H"
-        result = self.service.spreadsheets().values().get(spreadsheetId=self.spreadsheet_id, range=range)
+
+        result = self.service.spreadsheets().values().get(
+            spreadsheetId=self.spreadsheet_id,
+            range=range
+        ).execute()
+
         values = result.get("values", [])
 
-        for col in values:
-           if col[0] == message_id:
-              return True
-
-        return False
+        return {col[0] for col in values if col and col[0]}
 
     def get_existance_set(self) -> set:
         range = "Sheet1!H2:H"
@@ -122,3 +122,4 @@ class SpreadsheetInteractor:
               ]]
            } 
         ).execute()
+        return True

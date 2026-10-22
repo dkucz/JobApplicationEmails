@@ -21,6 +21,8 @@ from email.parser import BytesParser
 from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 
+CURRENT_WINDOW = '5d'
+
 BLACKLIST_KEYWORDS = [
     "work permit",
     "application number",
@@ -28,6 +30,7 @@ BLACKLIST_KEYWORDS = [
     "ircc",
     "immigration, refugee and citizenship canada",
     "embassy",
+    'e-transfer'
 ]
 
 APPLICATION_KEYWORDS = [
@@ -69,8 +72,6 @@ keyword_categories = {
   'interview': INTERVIEW_KEYWORDS,
   'update': UPDATE_KEYWORDS
 }
-
-CURRENT_WINDOW = '2d'
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
@@ -159,8 +160,8 @@ class JobApplicationTracker:
       email_bytes = base64.urlsafe_b64decode(raw_email)
       email_message = BytesParser(policy=policy.default).parsebytes(email_bytes)
 
-      subject = email_message['Subject']
-      sender = email_message['From']
+      subject = email_message['Subject'].lower()
+      sender = email_message['From'].lower()
 
       body = email_message.get_body(preferencelist=("plain", "html"))
 
@@ -187,6 +188,7 @@ class JobApplicationTracker:
         return email_data
 
   def _process(self, emails):
+    added = 0
     for email in emails:
       result = None
 
@@ -194,7 +196,10 @@ class JobApplicationTracker:
         result = self.gemini_interactor.prompt(email['content'])
 
       if result and isinstance(self.spreadsheet_interactor, SpreadsheetInteractor):
-        self.spreadsheet_interactor.add_to_spreadsheet(email, result)
+        if self.spreadsheet_interactor.add_to_spreadsheet(email, result):
+          added += 1
+
+    print(f"Emails added to spreadsheet: {added}")
 
   def run(self):
     emails = []
@@ -226,6 +231,13 @@ class JobApplicationTracker:
         to_process.append(email)
 
     self._process(to_process)
+
+    print("\nJob Application Tracker Summary")
+    print("-------------------------------")
+    print(f"Emails fetched: {len(msg_ids)}")
+    print(f"Already processed: {len(msg_ids) - len(set(msg_ids) - existing_ids)}")
+    print(f"New emails extracted: {len(emails)}")
+    print(f"Emails sent for processing: {len(to_process)}")
 
 if __name__ == "__main__":
   # main()
