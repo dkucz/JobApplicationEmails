@@ -1,10 +1,9 @@
-from datetime import datetime, timezone
+import os.path
+import base64
+import re
 
 from gemini_interactor import GeminiInteractor
 from spreadsheet_interactor import SpreadsheetInteractor
-
-import os.path
-import base64
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -14,12 +13,9 @@ from googleapiclient.errors import HttpError
 
 from bs4 import BeautifulSoup
 
-import base64
-import re
 from email import policy
 from email.parser import BytesParser
 from email.utils import parsedate_to_datetime
-from bs4 import BeautifulSoup
 
 CURRENT_WINDOW = '5d'
 
