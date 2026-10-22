@@ -9,10 +9,10 @@ class JobEmail(BaseModel):
     job_role: str = Field(description="Specific job title applied for, or empty if not a job email")
     company: str = Field(description="Company applied to, or empty if not a job email")
     is_job_email: bool = Field(description="Is this a job email or not")
-    interview_received: bool = Field(description="Is this email informing of an upcoming interview")
-    rejected: bool = Field(description="Is this email sending out a rejection from the job")
+    email_type: str = Field(description="The type of job-related email: application_confirmation, interview, assessment, rejection, offer, update, or other")
     application_status: str = Field(description="One word that represents status of the job, one of applied, interviewing, rejected, or offer")
     job_location: str = Field(description="Location of the job if in email, otherwise leave blank")
+    next_action: str = Field(description="The next action the user should take")
 
 class GeminiInteractor:
     def __init__(self):
@@ -34,4 +34,4 @@ class GeminiInteractor:
         )
 
         job_email = JobEmail.model_validate_json(interaction.output_text)
-        print(job_email)
+        return job_email

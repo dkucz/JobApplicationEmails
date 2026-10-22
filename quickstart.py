@@ -18,6 +18,7 @@ import base64
 import re
 from email import policy
 from email.parser import BytesParser
+from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 
 BLACKLIST_KEYWORDS = [
@@ -163,6 +164,8 @@ class JobApplicationTracker:
 
       body = email_message.get_body(preferencelist=("plain", "html"))
 
+      sent_date = parsedate_to_datetime(email_message["Date"])
+
       if body:
         content = body.get_content()
 
@@ -177,27 +180,35 @@ class JobApplicationTracker:
           "id": message_id,
           "sender": sender,
           "subject": subject,
-          "content": content
+          "content": content,
+          "date": sent_date
         }
 
         return email_data
 
-  def process(self, emails):
+  def _process(self, emails):
     for email in emails:
-      if isinstance(self.gemini_interactor, GeminiInteractor):
-        self.gemini_interactor.prompt(email['content'])
+      result = None
 
-      if isinstance(self.spreadsheet_interactor, SpreadsheetInteractor):
-        self.spreadsheet_interactor.add_to_spreadsheet(email)
+      if isinstance(self.gemini_interactor, GeminiInteractor):
+        result = self.gemini_interactor.prompt(email['content'])
+
+      if result and isinstance(self.spreadsheet_interactor, SpreadsheetInteractor):
+        self.spreadsheet_interactor.add_to_spreadsheet(email, result)
 
   def run(self):
     emails = []
 
     to_process = []
 
+    existing_ids = self.spreadsheet_interactor.get_existance_set()
+
     msg_ids = self._extract_new_message_ids()
 
     for id in msg_ids:
+      if id in existing_ids:
+        continue
+
       email_data = self._extract_body(id)
 
       if email_data:
@@ -214,10 +225,11 @@ class JobApplicationTracker:
       if check:
         to_process.append(email)
 
-    self.process(to_process)
+    self._process(to_process)
 
 if __name__ == "__main__":
   # main()
   gemini_interactor = GeminiInteractor()
-  job_app_tracker = JobApplicationTracker(gemini_interactor=gemini_interactor)
+  spreadsheet_interactor = SpreadsheetInteractor()
+  job_app_tracker = JobApplicationTracker(gemini_interactor=gemini_interactor, spreadsheet_interactor=spreadsheet_interactor)
   job_app_tracker.run()

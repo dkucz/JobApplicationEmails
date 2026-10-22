@@ -17,123 +17,108 @@ SCOPES = [
 load_dotenv()
 
 class SpreadsheetInteractor:
-  def __init__(self):
-    self.service = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-            # Save the credentials for the next run
-            with open("token.json", "w") as token:
-                token.write(creds.to_json())
+    def __init__(self):
+        self.service = None
+        if os.path.exists("token.json"):
+            creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+        # If there are no (valid) credentials available, let the user log in.
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    "credentials.json", SCOPES
+                )
+                creds = flow.run_local_server(port=0)
+                # Save the credentials for the next run
+                with open("token.json", "w") as token:
+                    token.write(creds.to_json())
 
-    try:
-        self.service = build("sheets", "v4", credentials=creds)
-        self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
+        try:
+            self.service = build("sheets", "v4", credentials=creds)
+            self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
+            self.range = "Sheet1!A1:H1"
 
-        if self.spreadsheet_id is None:
-            spreadsheet = self.service.spreadsheets().create(
-                body={
-                    "properties": {
-                        "title": "Job Application Tracker"
+            if self.spreadsheet_id is None:
+                spreadsheet = self.service.spreadsheets().create(
+                    body={
+                        "properties": {
+                            "title": "Job Application Tracker"
+                        }
                     }
-                }
-            ).execute()
+                ).execute()
 
-            self.spreadsheet_id = spreadsheet["spreadsheetId"]
+                self.spreadsheet_id = spreadsheet["spreadsheetId"]
 
-            set_key(".env", "SPREADSHEET_ID", self.spreadsheet_id)
+                set_key(".env", "SPREADSHEET_ID", self.spreadsheet_id)
 
-            print(spreadsheet["spreadsheetUrl"], self.spreadsheet_id)
+                print(spreadsheet["spreadsheetUrl"], self.spreadsheet_id)
 
-            self.service.spreadsheets().values().update(
-                spreadsheetId=self.spreadsheet_id,
-                range="Sheet1!A1:H1",
-                valueInputOption="RAW",
-                body={
-                    "values": [[
-                        "Date Received",
-                        "Company",
-                        "Job Title",
-                        "Email Type",
-                        "Application Status",
-                        "Job Location",
-                        "Next Action",
-                        "Gmail Message ID"
-                    ]]
-                }
-            ).execute()
+                self.service.spreadsheets().values().update(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=self.range,
+                    valueInputOption="RAW",
+                    body={
+                        "values": [[
+                            "Date Received",
+                            "Company",
+                            "Job Title",
+                            "Email Type",
+                            "Application Status",
+                            "Job Location",
+                            "Next Action",
+                            "Gmail Message ID"
+                        ]]
+                    }
+                ).execute()
 
+        except HttpError as error:
+            print(error)
 
-    except HttpError as error:
-       print(error)
+    def _check_existance(self, message_id, values) -> bool:
+        # currently will need to run an API call to check existance of each message. So just check
+        range = "Sheet1!H2:H"
+        result = self.service.spreadsheets().values().get(spreadsheetId=self.spreadsheet_id, range=range)
+        values = result.get("values", [])
 
-  def create(self):
-    return
+        for col in values:
+           if col[0] == message_id:
+              return True
 
-  def add_to_spreadsheet(self, email_data):
-    return
+        return False
 
-  def check_existance(self, message_id) -> bool:
-    return False
+    def get_existance_set(self) -> set:
+        range = "Sheet1!H2:H"
+        result = self.service.spreadsheets().values().get(spreadsheetId=self.spreadsheet_id, range=range).execute()
+        values = result.get("values", [])
 
-# The ID and range of a sample spreadsheet.
-SAMPLE_SPREADSHEET_ID = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-SAMPLE_RANGE_NAME = "Class Data!A2:E"
+        message_ids = set()
 
-def main():
-  """Shows basic usage of the Sheets API.
-  Prints values from a sample spreadsheet.
-  """
-  creds = None
-  # The file token.json stores the user's access and refresh tokens, and is
-  # created automatically when the authorization flow completes for the first
-  # time.
-  if os.path.exists("token.json"):
-    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-  # If there are no (valid) credentials available, let the user log in.
-  if not creds or not creds.valid:
-    if creds and creds.expired and creds.refresh_token:
-      creds.refresh(Request())
-    else:
-      flow = InstalledAppFlow.from_client_secrets_file(
-          "credentials.json", SCOPES
-      )
-      creds = flow.run_local_server(port=0)
-    # Save the credentials for the next run
-    with open("token.json", "w") as token:
-      token.write(creds.to_json())
+        for col in values:
+           if col[0] not in message_ids and col[0]:
+              message_ids.add(col[0])
 
-  try:
-    service = build("sheets", "v4", credentials=creds)
+        return message_ids
 
-    # Call the Sheets API
-    sheet = service.spreadsheets()
-    result = (
-        sheet.values()
-        .get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=SAMPLE_RANGE_NAME)
-        .execute()
-    )
-    values = result.get("values", [])
+    def add_to_spreadsheet(self, email_data, gemini_result):
+        date = email_data.get("date")
+        date = date.isoformat() if date else "Unknown"
 
-    if not values:
-      print("No data found.")
-      return
-
-    print("Name, Major:")
-    for row in values:
-      # Print columns A and E, which correspond to indices 0 and 4.
-      print(f"{row[0]}, {row[4]}")
-  except HttpError as err:
-    print(err)
-
-if __name__ == '__main__':
-   spreadsheet_interactor = SpreadsheetInteractor()
-   spreadsheet_interactor.create()
+        self.service.spreadsheets().values().append(
+           spreadsheetId=self.spreadsheet_id,
+           range="Sheet1!A:H",
+           valueInputOption="RAW",
+           insertDataOption="INSERT_ROWS",
+           body={
+              "values": [[
+                date,
+                gemini_result.get("company") or "Unknown",
+                gemini_result.get('job_role') or "Unknown",
+                gemini_result.get('email_type') or "Unknown",
+                gemini_result.get('application_status') or "Unknown",
+                gemini_result.get('job_location') or 'Unknown',
+                gemini_result.get('next_action') or "Unknown",
+                email_data['id']
+              ]]
+           } 
+        ).execute()
