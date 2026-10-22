@@ -9,7 +9,7 @@ class JobEmail(BaseModel):
     job_role: str = Field(description="Specific job title applied for, or empty if not a job email")
     company: str = Field(description="Company applied to, or empty if not a job email")
     is_job_email: bool = Field(description="Is this a job email or not")
-    email_type: str = Field(description="The type of job-related email: application_confirmation, interview, assessment, rejection, offer, update, or other")
+    email_type: str = Field(description="The type of job-related email: Application Confirmation, Interview, Assessment, Rejection, Offer, Update, or Other")
     application_status: str = Field(description="One word that represents status of the job, one of applied, interviewing, rejected, or offer")
     job_location: str = Field(description="Location of the job if in email, otherwise leave blank")
     next_action: str = Field(description="The next action the user should take")

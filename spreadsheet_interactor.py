@@ -112,12 +112,12 @@ class SpreadsheetInteractor:
            body={
               "values": [[
                 date,
-                gemini_result.get("company") or "Unknown",
-                gemini_result.get('job_role') or "Unknown",
-                gemini_result.get('email_type') or "Unknown",
-                gemini_result.get('application_status') or "Unknown",
-                gemini_result.get('job_location') or 'Unknown',
-                gemini_result.get('next_action') or "Unknown",
+                gemini_result.company or "Unknown",
+                gemini_result.job_role or "Unknown",
+                gemini_result.email_type or "Unknown",
+                gemini_result.application_status or "Unknown",
+                gemini_result.job_location or 'Unknown',
+                gemini_result.next_action or "Unknown",
                 email_data['id']
               ]]
            } 
