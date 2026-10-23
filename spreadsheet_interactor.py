@@ -19,6 +19,7 @@ load_dotenv()
 class SpreadsheetInteractor:
     def __init__(self):
         self.service = None
+        creds = None
         if os.path.exists("token.json"):
             creds = Credentials.from_authorized_user_file("token.json", SCOPES)
         # If there are no (valid) credentials available, let the user log in.
@@ -39,38 +40,9 @@ class SpreadsheetInteractor:
             self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
             self.range = "Sheet1!A1:H1"
 
-            if self.spreadsheet_id is None:
-                spreadsheet = self.service.spreadsheets().create(
-                    body={
-                        "properties": {
-                            "title": "Job Application Tracker"
-                        }
-                    }
-                ).execute()
-
-                self.spreadsheet_id = spreadsheet["spreadsheetId"]
-
-                set_key(".env", "SPREADSHEET_ID", self.spreadsheet_id)
-
-                print(spreadsheet["spreadsheetUrl"], self.spreadsheet_id)
-
-                self.service.spreadsheets().values().update(
-                    spreadsheetId=self.spreadsheet_id,
-                    range=self.range,
-                    valueInputOption="RAW",
-                    body={
-                        "values": [[
-                            "Date Received",
-                            "Company",
-                            "Job Title",
-                            "Email Type",
-                            "Application Status",
-                            "Job Location",
-                            "Next Action",
-                            "Gmail Message ID"
-                        ]]
-                    }
-                ).execute()
+            if not self.spreadsheet_id:
+                print("No spreadsheet ID configured. Please create a spreadsheet first.")
+                raise RuntimeError
 
         except HttpError as error:
             print(error)
@@ -123,3 +95,61 @@ class SpreadsheetInteractor:
            } 
         ).execute()
         return True
+
+    def create_spreadsheet(self):
+        creds = None
+        if os.path.exists("token.json"):
+            creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+        # If there are no (valid) credentials available, let the user log in.
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    "credentials.json", SCOPES
+                )
+                creds = flow.run_local_server(port=0)
+                # Save the credentials for the next run
+                with open("token.json", "w") as token:
+                    token.write(creds.to_json())
+
+        
+        try:
+            service = build("sheets", "v4", credentials=creds)
+            spreadsheet = service.spreadsheets().create(
+                body={
+                    "properties": {
+                        "title": "Job Application Tracker"
+                    }
+                }
+            ).execute()
+
+            spreadsheet_id = spreadsheet["spreadsheetId"]
+
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=self.range,
+                valueInputOption="RAW",
+                body={
+                    "values": [[
+                        "Date Received",
+                        "Company",
+                        "Job Title",
+                        "Email Type",
+                        "Application Status",
+                        "Job Location",
+                        "Next Action",
+                        "Gmail Message ID"
+                    ]]
+                }
+            ).execute()
+
+            print("Please copy and update Github Action Secrets with the Spreadsheet ID")
+            print(f"A spreadsheet was created with the following ID: {spreadsheet_id}")
+
+        except HttpError as error:
+            print(f'An error occured while trying to create the spreadsheet: {error}')
+
+if __name__ == '__main__':
+    spreadsheet_interactor = SpreadsheetInteractor()
+    spreadsheet_interactor.create_spreadsheet()
