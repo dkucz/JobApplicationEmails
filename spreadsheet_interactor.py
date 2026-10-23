@@ -115,6 +115,12 @@ class SpreadsheetInteractor:
 
         
         try:
+            possible_id = os.getenv('SPREADSHEET_ID')
+
+            if possible_id:
+                print('Spreadsheet ID already set')
+                return
+
             service = build("sheets", "v4", credentials=creds)
             spreadsheet = service.spreadsheets().create(
                 body={
