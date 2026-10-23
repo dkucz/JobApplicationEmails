@@ -5,8 +5,7 @@ name: Job Application Email Tracker
 
 on:
   schedule:
-    - cron: "50 * * * *"
-  workflow_dispatch:
+    - cron: "30 * * * *"
   
 permissions:
   contents: read
