@@ -32,10 +32,11 @@ def main():
       with open("token.json", "w") as token:
         token.write(creds.to_json())
   except RefreshError as error:
-    os.remove("token.json")
+    print(error)
+    if os.path.exists("token.json"):
+      os.remove("token.json")
     main()
-  finally:
+  except:
     raise RuntimeError('Something went wrong')
-
 if __name__ == '__main__':
   main()
