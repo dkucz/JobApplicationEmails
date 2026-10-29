@@ -15,6 +15,7 @@ A Python app that scans your email for job-application-related messages, uses Go
 | File | Purpose |
 | --- | --- |
 | `app.py` | Main entry point. Run this to execute the tracker. |
+| `refresh_credentials.py` | Reauthorizes Google access when the saved token has expired or been revoked. |
 | `gemini_interactor.py` | Handles requests to the Gemini API. |
 | `spreadsheet_interactor.py` | Reads from and writes to the Google Sheet. |
 | `requirements.txt` | Python dependencies. |
@@ -42,6 +43,14 @@ pip install -r requirements.txt
 1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the APIs the app uses.
 2. Create an OAuth client ID (desktop app) and download it as `credentials.json`.
 3. Run the app once locally and complete the sign-in. This creates `token.json`.
+
+If the saved Google token is revoked or cannot be refreshed, run the credential refresh script from the project directory:
+
+```bash
+python refresh_credentials.py
+```
+
+It attempts to refresh the saved token. If Google rejects it with `invalid_grant`, the script removes `token.json` and starts the OAuth sign-in flow again using `credentials.json`. Complete sign-in in the browser; the new token is saved to `token.json`. You may then need to update the `GOOGLE_TOKEN_JSON` GitHub Actions secret with the new file contents. The current script also raises a `RuntimeError` after running because of its `finally` block, even if token refresh or sign-in succeeded; verify that `token.json` was updated before treating that error as a failed authorization.
 
 > **Important:** if your OAuth consent screen is in **Testing** status, Google expires refresh tokens after 7 days. Set the app to **In production** to avoid your automated runs failing after a week.
 
@@ -171,6 +180,7 @@ A response code of `204` means success, and a new run appears in your Actions ta
 
 - **No scheduled runs appear:** GitHub's scheduler is best-effort. Use the Apps Script trigger above.
 - **Auth errors after about a week:** your Google OAuth app is probably in Testing mode. Switch it to In production and regenerate `token.json`.
+- **`invalid_grant: Token has been expired or revoked`:** run `python refresh_credentials.py` locally and complete Google sign-in. The script currently raises a `RuntimeError` unconditionally at exit, so check whether `token.json` was refreshed; if it was, update the `GOOGLE_TOKEN_JSON` secret if you use GitHub Actions.
 - **Apps Script returns 401 or 403:** check the token's permissions and expiration.
 - **Apps Script returns 404:** check `GH_REPO` and `GH_WORKFLOW` for typos.
 - **Node.js deprecation warnings:** update the `actions/checkout` and `actions/setup-python` versions in the workflow.
