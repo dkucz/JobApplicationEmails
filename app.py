@@ -17,6 +17,12 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import parsedate_to_datetime
 
+# If modifying these scopes, delete the file token.json.
+SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/spreadsheets",
+]
+
 CURRENT_WINDOW = '5d'
 
 BLACKLIST_KEYWORDS = [
@@ -68,12 +74,6 @@ keyword_categories = {
   'interview': INTERVIEW_KEYWORDS,
   'update': UPDATE_KEYWORDS
 }
-
-# If modifying these scopes, delete the file token.json.
-SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/spreadsheets",
-]
 
 class JobApplicationTracker:
   def __init__(self, spreadsheet_interactor=None, gemini_interactor=None):
