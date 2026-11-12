@@ -35,6 +35,7 @@ def main():
     print(error)
     if os.path.exists("token.json"):
       os.remove("token.json")
+      print('Deleted Old Token')
     main()
   except:
     raise RuntimeError('Something went wrong')
